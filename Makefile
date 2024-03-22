@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -g -lssl -lcrypto -fsanitize=address
+CFLAGS = -Wall -Wextra -g -lssl -lcrypto
 SRCS = main.c $(wildcard utils/*.c core/*.c)
 OBJS = $(SRCS:.c=.o)
 EXEC = main
