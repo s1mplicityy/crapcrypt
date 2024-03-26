@@ -6,7 +6,7 @@ FILE* fileOpen(char* fileName, char* mode)
     FILE* file = fopen(fileName, mode);
     if (file == NULL)
     {
-        printf("Can't open file: \"%s\"", fileName);
+        printf("Can't open file: \"%s\"\n", fileName);
         exit(1);
     }
     return file;
@@ -24,7 +24,8 @@ unsigned char* fileRead(FILE* file)
 {
     int fSize = fileSize(file);
     unsigned char* buf = (unsigned char*)malloc(fSize + 1);
-    if (buf == NULL) {
+    if (buf == NULL)
+    {
         printf("Failed to allocate memory\n");
         exit(1);
     }
@@ -32,7 +33,7 @@ unsigned char* fileRead(FILE* file)
     // printf("fileRead: read %d bytes\n", bytesRead);
     if (bytesRead != fSize)
     {
-        printf("Error reading file");
+        printf("Error reading file\n");
         fclose(file);
         free(buf);
         return NULL;
@@ -43,7 +44,8 @@ unsigned char* fileRead(FILE* file)
 unsigned char* fileReadBytes(FILE* file, int len)
 {
     unsigned char* buf = (unsigned char*)malloc(len + 1);
-    if (buf == NULL) {
+    if (buf == NULL)
+    {
         printf("Failed to allocate memory\n");
         exit(1);
     }
@@ -51,7 +53,7 @@ unsigned char* fileReadBytes(FILE* file, int len)
     // printf("fileRead: read %d bytes\n", bytesRead);
     if (bytesRead != len)
     {
-        printf("Error reading file");
+        printf("Error reading file\n");
         fclose(file);
         free(buf);
         return NULL;

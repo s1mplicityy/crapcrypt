@@ -7,10 +7,10 @@ EXEC = main
 all: $(EXEC)
 
 $(EXEC): $(OBJS)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $^ -o $@ $(CFLAGS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -c $< -o $@ $(CFLAGS)
 
 clean:
 	rm -f $(OBJS) $(EXEC)

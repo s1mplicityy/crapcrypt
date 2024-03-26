@@ -4,14 +4,11 @@
 #include <openssl/rand.h>
 #include <openssl/evp.h>
 
-#include "../utils/files.h"
+#define KEY_LEN   32
+#define SALT_LEN  16
 
-#define KEY_LEN  32
-#define SALT_LEN 16
-
-typedef unsigned char uchar;
-
-void sha256(const uchar *input, size_t inputLen, uchar *output) {
+void sha256(const unsigned char *input, size_t inputLen, unsigned char *output)
+{
     // I stole this
     EVP_MD_CTX *mdctx;
     const EVP_MD *md;
@@ -25,14 +22,14 @@ void sha256(const uchar *input, size_t inputLen, uchar *output) {
     EVP_MD_CTX_free(mdctx);
 }
 
-unsigned char* xcombine(unsigned char** blocks, int* lens, int count)
+unsigned char* xjoin(unsigned char** blocks, int* lens, int count)
 {
     int len = 0;
     for (int i = 0; i < count; i++) {
         len += lens[i];
     }
-    printf("xcombine: len = %d\n", len);
-    uchar* joined = (uchar*)malloc(len);
+    // printf("xjoin: len = %d\n", len);
+    unsigned char* joined = (unsigned char*)malloc(len);
     if (joined == NULL) {
         printf("Memory allocation failed\n");
         exit(1);
@@ -48,42 +45,70 @@ unsigned char* xcombine(unsigned char** blocks, int* lens, int count)
 typedef struct {
     unsigned char* key;
     unsigned char* salt;
-} keyStruct;
+} DerivedKeyData;
 
-keyStruct deriveKey(uchar* passphrase, size_t passphraseLen, uchar* salt, int iters) {
+DerivedKeyData deriveKey(unsigned char* passphrase, size_t passphraseLen, unsigned char* salt, int iters)
+{
     // The key
-    uchar* keyBuf = (uchar*)malloc(KEY_LEN);
-    if (keyBuf == NULL) {
+    unsigned char* keyBuf = (unsigned char*)malloc(KEY_LEN);
+    if (keyBuf == NULL)
+    {
         printf("Failed to allocate memory");
         exit(1);
     }
     // Random salt
-    if (salt == NULL) {
-        salt = (uchar*)malloc(SALT_LEN);
+    if (salt == NULL)
+    {
+        salt = (unsigned char*)malloc(SALT_LEN);
         if (RAND_bytes(salt, SALT_LEN) != 1) {
             printf("Failed to generate salt");
             exit(1);
         }
-        // printf("deriveKey: generated salt: %.*s\n", 16, salt);
-        printf("deriveKey: generated salt: ");
-        for (int i = 0; i < SALT_LEN; i++) printf("%02x", salt[i]);
-        printf("\n");
+        // printf("deriveKey: generated salt: ");
+        // for (int i = 0; i < SALT_LEN; i++) printf("%02x", salt[i]);
+        // printf("\n");
     }
+    // printf("deriveKey: using salt: ");
+    // for (int i = 0; i < SALT_LEN; i++) printf("%02x", salt[i]);
+    // printf("\n");
 
-    uchar* blocks[] = {passphrase, salt};
+    unsigned char* blocks[] = {passphrase, salt};
     int blockLens[] = {passphraseLen, SALT_LEN};
-    uchar* saltedPass = xcombine(blocks, blockLens, 2);
+    unsigned char* saltedPass = xjoin(blocks, blockLens, 2);
     sha256(saltedPass, passphraseLen + SALT_LEN, keyBuf);
-    for (int i = 0; i < iters - 1; i++) {
+    for (int i = 0; i < iters - 1; i++)
+    {
         sha256(keyBuf, KEY_LEN, keyBuf);
     }
+    // printf("deriveKey: derived key: ");
+    // for (int i = 0; i < KEY_LEN; i++) printf("%02x", keyBuf[i]);
+    // printf("\n");
 
     // Cleanup
     free(saltedPass);
     
     // Form the struct and return
-    keyStruct keyInfo;
+    DerivedKeyData keyInfo;
     keyInfo.key = keyBuf;
     keyInfo.salt = salt;
     return keyInfo;
+}
+
+DerivedKeyData* expandKeys(unsigned char* passphrase, size_t passphraseLen, unsigned char** roundSalts, int iters)
+{
+    DerivedKeyData* keys = malloc(16 * sizeof(DerivedKeyData));
+    for (int i = 0; i < 16; i++)
+    {
+        DerivedKeyData key;
+        if (roundSalts != NULL)
+        {
+            key = deriveKey(passphrase, passphraseLen, roundSalts[i], iters);
+        }
+        else
+        {
+            key = deriveKey(passphrase, passphraseLen, NULL, iters);
+        }
+        keys[i] = key;
+    }
+    return keys;
 }

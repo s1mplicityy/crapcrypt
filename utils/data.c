@@ -8,9 +8,10 @@ char* slice(const char* str, int start, int end)
     char* sliced_str = (char*)malloc(slice_length);
     if (sliced_str == NULL) {
         printf("Memory allocation failed");
-        return 0;
+        exit(1);
     }
     strncpy(sliced_str, str + start, slice_length);
+    // memcpy(sliced_str, str + start, slice_length);
     return sliced_str;
 }
 
@@ -20,7 +21,7 @@ char* safeSlice(const char* str, int start, int end)
     char* sliced_str = (char*)malloc(slice_length + 1);
     if (sliced_str == NULL) {
         printf("Memory allocation failed");
-        return 0;
+        exit(1);
     }
     strncpy(sliced_str, str + start, slice_length);
     sliced_str[slice_length] = '\0';
@@ -39,8 +40,8 @@ typedef struct {
     char** blocks;
     int blockCount;
     int padLen;
-} blocksStruct;
-void _bsFree(blocksStruct* bstruct)
+} BlockData;
+void _bsFree(BlockData* bstruct)
 {
     for (int i = 0; i < bstruct->blockCount; i++) {
         free(bstruct->blocks[i]);
@@ -48,7 +49,7 @@ void _bsFree(blocksStruct* bstruct)
     free(bstruct->blocks);
 } 
 
-blocksStruct getBlocks(char* data, int dataLen)
+BlockData getBlocks(char* data, int dataLen)
 {
     // Gather data
     int leftover = dataLen % 32;
@@ -57,7 +58,7 @@ blocksStruct getBlocks(char* data, int dataLen)
     // If data len is not multiple of 32, add one more block
     if (leftover != 0) blockCount++;
     // Init blockstruct
-    blocksStruct bs;
+    BlockData bs;
     bs.blocks = (char**)malloc(blockCount * sizeof(char*));
     if (bs.blocks == NULL) {
         printf("Memory allocation failed");
@@ -71,14 +72,13 @@ blocksStruct getBlocks(char* data, int dataLen)
         char* chunk = slice(data, i*32, i*32+32);
         memcpy(bs.blocks[i], chunk, 32);
         free(chunk);
-        chunk = NULL;
         // printf("getBlocks: blocks[%d] = %.*s\n", i, 32, bs.blocks[i]);
     }
     // Pad the last block if necessary
     if (leftover != 0) {
         char* leftoverChunk = slice(data,
             (blockCount - 1) * 32,
-            (blockCount) * 32);
+            (blockCount * 32));
         char* paddedLeftover = _pad(leftoverChunk, leftover, pad);
         bs.blocks[blockCount - 1] = (char*)malloc(32 + 1);
         if (bs.blocks[blockCount - 1] == NULL) {
@@ -87,7 +87,6 @@ blocksStruct getBlocks(char* data, int dataLen)
         }
         memcpy(bs.blocks[blockCount - 1], paddedLeftover, 32);
         free(leftoverChunk);
-        leftoverChunk = NULL;
         // printf("getBlocks: paddedLeftover = %.*s\n", 32, bs.blocks[blockCount - 1]);
     }
     // Finish the struct and return
@@ -96,9 +95,10 @@ blocksStruct getBlocks(char* data, int dataLen)
     return bs;
 }
 
-unsigned char* combine(const unsigned char** blocks, int count)
+unsigned char* join(const unsigned char** blocks, int count)
 {
     int len = 32 * count;
+    // printf("join: len = %d\n", len);
     unsigned char* joined = (unsigned char*)malloc(len);
     if (joined == NULL) {
         printf("Memory allocation failed\n");
@@ -107,6 +107,6 @@ unsigned char* combine(const unsigned char** blocks, int count)
     for (int i = 0; i < count; i++) {
         memcpy(joined + i*32, blocks[i], 32);
     }
-    // printf("combine: %.*s\n", len, joined);
+    // printf("join: %.*s\n", len, joined);
     return joined;
 }

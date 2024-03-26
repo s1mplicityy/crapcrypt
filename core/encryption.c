@@ -4,27 +4,38 @@
 
 #include "../utils/data.h"
 #include "xor.h"
+#include "key.h"
 
-blocksStruct ecbEncryptBlocks(blocksStruct* plain, unsigned char key[32])
+void ecbEncryptBlocks(BlockData* blocks, unsigned char key[32])
 {
-    blocksStruct xorredBlocksStruct;
-    xorredBlocksStruct.blockCount = plain->blockCount;
-    xorredBlocksStruct.blocks = (unsigned char**)malloc(plain->blockCount * sizeof(unsigned char*));
-    if (xorredBlocksStruct.blocks == NULL) {
-        printf("Failed to allocate memory\n");
-        exit(1);
-    }
-    for (int i = 0; i < plain->blockCount; i++) {
-        unsigned char* xorredBlock = xor_blocks(plain->blocks[i], key);
-        // printf("ecbEncryptBlocks: %.*s\n", 32, xorredBlock);
-        // printf("%.*s ^ ", 32, plain.blocks[i]);
-        // for (int t = 0; t < 32; t++) printf("%02x", key[t]);
-        // printf(" = ");
-        // for (int t = 0; t < 32; t++) printf("%02x", xorredBlock[t]);
-        // printf("\n");
-        xorredBlocksStruct.blocks[i] = (unsigned char*)malloc(32);
-        memcpy(xorredBlocksStruct.blocks[i], xorredBlock, 32);
+    blocks->padLen = 0;
+    for (int i = 0; i < blocks->blockCount; i++)
+    {
+        unsigned char* xorredBlock = xor_blocks(blocks->blocks[i], key);
+        memcpy(blocks->blocks[i], xorredBlock, 32);
         free(xorredBlock);
     }
-    return xorredBlocksStruct;
+}
+
+unsigned char* buildECBCiphertext(BlockData xorredBlocks, int padLen, unsigned char* masterSalt, unsigned char* roundSalts[16])
+{
+    unsigned char* ciphertext = join(xorredBlocks.blocks, xorredBlocks.blockCount);
+    unsigned char padLenStr[4]; // I got stuck there for three days
+    memset(padLenStr, 0, sizeof(padLenStr)); // The only thing I had to do was add this line...
+    snprintf((char*)padLenStr, 4, "%d", padLen);
+    unsigned char* finalCipherBlocks[] = {
+        masterSalt,
+        roundSalts[0],  roundSalts[1],  roundSalts[2],  roundSalts[3],
+        roundSalts[4],  roundSalts[5],  roundSalts[6],  roundSalts[7],
+        roundSalts[8],  roundSalts[9],  roundSalts[10], roundSalts[11],
+        roundSalts[12], roundSalts[13], roundSalts[14], roundSalts[15],
+        padLenStr, ciphertext
+        };
+    int lengths[] = { 16,
+        16, 16, 16, 16, 16, 16, 16, 16,
+        16, 16, 16, 16, 16, 16, 16, 16,
+        4, 32 * xorredBlocks.blockCount };
+    unsigned char* finalCiphertext = xjoin(finalCipherBlocks, lengths, 19);
+    free(ciphertext);
+    return finalCiphertext;
 }
