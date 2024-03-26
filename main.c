@@ -12,7 +12,7 @@
 
 #define MIN_ARGS  4
 #define MAX_ARGS  50
-#define KDF_ITERS 10
+#define KDF_ITERS 100000
 
 int main(int argc, char** argv)
 {
