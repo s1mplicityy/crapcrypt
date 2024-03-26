@@ -7,19 +7,14 @@
 #define KEY_LEN   32
 #define SALT_LEN  16
 
-void sha256(const unsigned char *input, size_t inputLen, unsigned char *output)
+void sha256(EVP_MD_CTX* mdctx, EVP_MD* md, const unsigned char *input, size_t inputLen, unsigned char *output)
 {
     // I stole this
-    EVP_MD_CTX *mdctx;
-    const EVP_MD *md;
     unsigned int md_len;
 
-    md = EVP_sha256();
-    mdctx = EVP_MD_CTX_new();
     EVP_DigestInit_ex(mdctx, md, NULL);
     EVP_DigestUpdate(mdctx, input, inputLen);
     EVP_DigestFinal_ex(mdctx, output, &md_len);
-    EVP_MD_CTX_free(mdctx);
 }
 
 unsigned char* xjoin(unsigned char** blocks, int* lens, int count)
@@ -47,7 +42,7 @@ typedef struct {
     unsigned char* salt;
 } DerivedKeyData;
 
-DerivedKeyData deriveKey(unsigned char* passphrase, size_t passphraseLen, unsigned char* salt, int iters)
+DerivedKeyData deriveKey(EVP_MD_CTX* mdctx, EVP_MD* md, unsigned char* passphrase, size_t passphraseLen, unsigned char* salt, int iters)
 {
     // The key
     unsigned char* keyBuf = (unsigned char*)malloc(KEY_LEN);
@@ -75,10 +70,10 @@ DerivedKeyData deriveKey(unsigned char* passphrase, size_t passphraseLen, unsign
     unsigned char* blocks[] = {passphrase, salt};
     int blockLens[] = {passphraseLen, SALT_LEN};
     unsigned char* saltedPass = xjoin(blocks, blockLens, 2);
-    sha256(saltedPass, passphraseLen + SALT_LEN, keyBuf);
+    sha256(mdctx, md, saltedPass, passphraseLen + SALT_LEN, keyBuf);
     for (int i = 0; i < iters - 1; i++)
     {
-        sha256(keyBuf, KEY_LEN, keyBuf);
+        sha256(mdctx, md, keyBuf, KEY_LEN, keyBuf);
     }
     // printf("deriveKey: derived key: ");
     // for (int i = 0; i < KEY_LEN; i++) printf("%02x", keyBuf[i]);
@@ -94,7 +89,7 @@ DerivedKeyData deriveKey(unsigned char* passphrase, size_t passphraseLen, unsign
     return keyInfo;
 }
 
-DerivedKeyData* expandKeys(unsigned char* passphrase, size_t passphraseLen, unsigned char** roundSalts, int iters)
+DerivedKeyData* expandKeys(EVP_MD_CTX* mdctx, EVP_MD* md, unsigned char* passphrase, size_t passphraseLen, unsigned char** roundSalts, int iters)
 {
     DerivedKeyData* keys = malloc(16 * sizeof(DerivedKeyData));
     for (int i = 0; i < 16; i++)
@@ -102,11 +97,11 @@ DerivedKeyData* expandKeys(unsigned char* passphrase, size_t passphraseLen, unsi
         DerivedKeyData key;
         if (roundSalts != NULL)
         {
-            key = deriveKey(passphrase, passphraseLen, roundSalts[i], iters);
+            key = deriveKey(mdctx, md, passphrase, passphraseLen, roundSalts[i], iters);
         }
         else
         {
-            key = deriveKey(passphrase, passphraseLen, NULL, iters);
+            key = deriveKey(mdctx, md, passphrase, passphraseLen, NULL, iters);
         }
         keys[i] = key;
     }

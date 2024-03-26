@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -g -lssl -lcrypto
+CFLAGS = -Wall -Wextra -g -lssl -lcrypto -O3
 SRCS = main.c $(wildcard utils/*.c core/*.c)
 OBJS = $(SRCS:.c=.o)
 EXEC = main

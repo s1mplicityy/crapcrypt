@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <ctype.h>
+#include <openssl/evp.h>
 
 #include "utils/data.h"
 #include "utils/files.h"
@@ -21,10 +22,17 @@ int main(int argc, char** argv)
         return 0;
     }
 
+    // Init variables
     char* inputFileName = NULL;
     char* outputFileName = NULL;
     char* passphrase = NULL;
     char decrypt = 0;
+
+    // Init stuff for hashing
+    EVP_MD_CTX* mdctx;
+    EVP_MD* md;
+    mdctx = EVP_MD_CTX_new();
+    md = (EVP_MD*)EVP_sha256();
 
     int c;
     opterr = 0;
@@ -90,7 +98,7 @@ int main(int argc, char** argv)
         printf("\n");
 
         // Re-derive the key
-        DerivedKeyData key = deriveKey((unsigned char*)passphrase, strlen(passphrase), (unsigned char*)salt, KDF_ITERS);
+        DerivedKeyData key = deriveKey(mdctx, md, (unsigned char*)passphrase, strlen(passphrase), (unsigned char*)salt, KDF_ITERS);
         printf("(decrypt): Key = ");
         for (int i = 0; i < 32; i++)
         {
@@ -99,7 +107,7 @@ int main(int argc, char** argv)
         printf("\n");
 
         // Expand
-        DerivedKeyData* roundKeys = expandKeys((unsigned char*)passphrase, strlen(passphrase), roundSalts, KDF_ITERS);
+        DerivedKeyData* roundKeys = expandKeys(mdctx, md, (unsigned char*)passphrase, strlen(passphrase), roundSalts, KDF_ITERS);
 
         // Split data into blocks
         char* ciphertext = safeSlice((char*)inputData, 20 + 256, fileSize(inputFile) - padLen);
@@ -139,7 +147,7 @@ int main(int argc, char** argv)
         BlockData blocks = getBlocks((char*)inputData, fileSize(inputFile));
 
         // Derive the master key
-        DerivedKeyData key = deriveKey((unsigned char*)passphrase, strlen(passphrase), NULL, KDF_ITERS);
+        DerivedKeyData key = deriveKey(mdctx, md, (unsigned char*)passphrase, strlen(passphrase), NULL, KDF_ITERS);
         printf("(encrypt): Key = ");
         for (int i = 0; i < 32; i++)
         {
@@ -148,7 +156,7 @@ int main(int argc, char** argv)
         printf("\n");
 
         // Expand
-        DerivedKeyData* roundKeys = expandKeys((unsigned char*)passphrase, strlen(passphrase), NULL, KDF_ITERS);
+        DerivedKeyData* roundKeys = expandKeys(mdctx, md, (unsigned char*)passphrase, strlen(passphrase), NULL, KDF_ITERS);
         unsigned char* roundSalts[16];
         for (int i = 0; i < 16; i++)
         {
@@ -186,4 +194,5 @@ int main(int argc, char** argv)
     fclose(inputFile);
     fclose(outputFile);
     free(inputData);
+    EVP_MD_CTX_free(mdctx);
 }
