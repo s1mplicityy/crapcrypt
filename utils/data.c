@@ -2,31 +2,31 @@
 #include <string.h>
 #include <stdlib.h>
 
-char* slice(const char* str, int start, int end)
-{
-    int slice_length = end - start;
-    char* sliced_str = (char*)malloc(slice_length);
-    if (sliced_str == NULL) {
-        printf("Memory allocation failed");
-        exit(1);
-    }
-    strncpy(sliced_str, str + start, slice_length);
-    // memcpy(sliced_str, str + start, slice_length);
-    return sliced_str;
-}
+// char* slice(const char* str, int start, int end)
+// {
+//     int slice_length = end - start;
+//     char* sliced_str = (char*)malloc(slice_length);
+//     if (sliced_str == NULL) {
+//         printf("Memory allocation failed");
+//         exit(1);
+//     }
+//     strncpy(sliced_str, str + start, slice_length);
+//     // memcpy(sliced_str, str + start, slice_length);
+//     return sliced_str;
+// }
 
-char* safeSlice(const char* str, int start, int end)
-{
-    int slice_length = end - start;
-    char* sliced_str = (char*)malloc(slice_length + 1);
-    if (sliced_str == NULL) {
-        printf("Memory allocation failed");
-        exit(1);
-    }
-    strncpy(sliced_str, str + start, slice_length);
-    sliced_str[slice_length] = '\0';
-    return sliced_str;
-}
+// char* safeSlice(const char* str, int start, int end)
+// {
+//     int slice_length = end - start;
+//     char* sliced_str = (char*)malloc(slice_length + 1);
+//     if (sliced_str == NULL) {
+//         printf("Memory allocation failed");
+//         exit(1);
+//     }
+//     strncpy(sliced_str, str + start, slice_length);
+//     sliced_str[slice_length] = '\0';
+//     return sliced_str;
+// }
 
 char* _pad(char* data, int offset, int padLen)
 {
@@ -53,7 +53,8 @@ BlockData getBlocks(char* data, int dataLen)
 {
     // Gather data
     int leftover = dataLen % 32;
-    int pad = 32 - leftover;
+    int pad = 0;
+    if (leftover != 0) pad = 32 - leftover;
     int blockCount = dataLen / 32;
     // If data len is not multiple of 32, add one more block
     if (leftover != 0) blockCount++;
@@ -64,31 +65,26 @@ BlockData getBlocks(char* data, int dataLen)
         printf("Memory allocation failed");
         exit(1);
     }
-    // printf("getBlocks: %d bytes of data, %d blocks, %d bytes left, %d bytes pad\n", dataLen, blockCount, leftover, pad);
+    printf("getBlocks: %d bytes of data, %d blocks, %d bytes left, %d bytes pad\n", dataLen, blockCount, leftover, pad);
     // Blocks will be stored here
     // Split the data into blocks
     for (int i = 0; i < blockCount - 1; i++) {
         bs.blocks[i] = (char*)malloc(32);
-        char* chunk = slice(data, i*32, i*32+32);
-        memcpy(bs.blocks[i], chunk, 32);
-        free(chunk);
+        memcpy(bs.blocks[i], data + i*32, 32);
         // printf("getBlocks: blocks[%d] = %.*s\n", i, 32, bs.blocks[i]);
     }
     // Pad the last block if necessary
-    if (leftover != 0) {
-        char* leftoverChunk = slice(data,
-            (blockCount - 1) * 32,
-            (blockCount * 32));
-        char* paddedLeftover = _pad(leftoverChunk, leftover, pad);
-        bs.blocks[blockCount - 1] = (char*)malloc(32 + 1);
-        if (bs.blocks[blockCount - 1] == NULL) {
-            printf("Memory allocation failed\n");
-            exit(-1);
-        }
-        memcpy(bs.blocks[blockCount - 1], paddedLeftover, 32);
-        free(leftoverChunk);
-        // printf("getBlocks: paddedLeftover = %.*s\n", 32, bs.blocks[blockCount - 1]);
+    char* leftoverChunk = malloc(32);
+    memcpy(leftoverChunk, data + (blockCount-1)*32, leftover);
+    char* paddedLeftover = _pad(leftoverChunk, leftover, pad);
+    bs.blocks[blockCount - 1] = (char*)malloc(32);
+    if (bs.blocks[blockCount - 1] == NULL) {
+        printf("Memory allocation failed\n");
+        exit(-1);
     }
+    memcpy(bs.blocks[blockCount - 1], paddedLeftover, 32);
+    free(leftoverChunk);
+    // printf("getBlocks: paddedLeftover = %.*s\n", 32, bs.blocks[blockCount - 1]);
     // Finish the struct and return
     bs.blockCount = blockCount;
     bs.padLen = pad;

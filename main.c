@@ -10,14 +10,15 @@
 #include "utils/files.h"
 #include "core/key.h"
 #include "core/encryption.h"
+#include "core/core.h"
 
 #define MIN_ARGS  4
 #define MAX_ARGS  50
-#define KDF_ITERS 100000
 
 int main(int argc, char** argv)
 {
-    if (argc < MIN_ARGS || argc > MAX_ARGS) {
+    if (argc < MIN_ARGS || argc > MAX_ARGS)
+    {
         printf("Invalid argument count (%d), expected %d-%d\n", argc, MIN_ARGS, MAX_ARGS);
         return 0;
     }
@@ -27,18 +28,18 @@ int main(int argc, char** argv)
     char* outputFileName = NULL;
     char* passphrase = NULL;
     char decrypt = 0;
-
-    // Init stuff for hashing
-    EVP_MD_CTX* mdctx;
-    EVP_MD* md;
-    mdctx = EVP_MD_CTX_new();
-    md = (EVP_MD*)EVP_sha256();
+    char mode = 0;
 
     int c;
     opterr = 0;
-    while ((c = getopt(argc, argv, "i:o:p:d")) != -1)
+    while ((c = getopt(argc, argv, "m:i:o:p:d")) != -1)
         switch (c)
         {
+        case 'm':
+            if (!strcmp(optarg, "ecb") || !strcmp(optarg, "ECB")) mode = 1;
+            else if (!strcmp(optarg, "cbc") || !strcmp(optarg, "CBC")) mode = 2;
+            else printf("Unknown mode '%s'\n", optarg);
+            break;
         case 'i':
             inputFileName = optarg;
             break;
@@ -55,138 +56,61 @@ int main(int argc, char** argv)
             printf("Unknown option '-%c'\n", optopt);
             return 1;
         default:
-            printf("Usage: %s -i infile -o outfile -p passphrase [-d]\n", argv[0]);
+            printf("Usage: %s -i infile -o outfile -p passphrase [-d] [-u]\n", argv[0]);
             return 1;
         }
 
-    if (!inputFileName || !outputFileName || !passphrase)
+    if (!inputFileName || !outputFileName || !passphrase || !mode)
     {
-        printf("Usage: %s -i infile -o outfile -p passphrase [-d]\n", argv[0]);
+        printf("Usage: %s -m mode(ecb,cbc) -i infile -o outfile -p passphrase [-d]\n", argv[0]);
         return 1;
     }
+    if (mode == 1) printf("Note: Using ECB mode (not recommended)\n");
 
+    // Init stuff for hashing
+    EVP_MD_CTX* mdctx;
+    EVP_MD* md;
+    mdctx = EVP_MD_CTX_new();
+    md = (EVP_MD*)EVP_sha256();
 
     // Get initial data
     FILE* inputFile = fileOpen(inputFileName, "rb");
     FILE* outputFile = fileOpen(outputFileName, "wb");
-    unsigned char* inputData = fileRead(inputFile);
+    char* inputData = (char*)fileRead(inputFile);
     
     if (decrypt)
     {
-        // ECB decryption
-        unsigned char* salt = (unsigned char*)malloc(16);
-        memcpy(salt, inputData, 16);
-        printf("(decrypt): Salt = ");
-        for (int i = 0; i < 16; i++)
+        if (mode == 1)
         {
-            printf("%02x", salt[i]);
-        }
-        printf("\n");
-
-        // Extract round salts
-        unsigned char** roundSalts = malloc(16 * sizeof(unsigned char*));
-        for (int i = 0; i < 16; i++)
+            // ECB decryption
+            if (fileSize(inputFile) < 308)
+            {
+                printf("Ciphertext file can't be smaller than 340 bytes\n");
+                exit(1);
+            }
+            ecbDecryptionWrapper(inputData, passphrase, inputFile, outputFile, mdctx, md);
+        } else
         {
-            roundSalts[i] = malloc(16);
-            memcpy(roundSalts[i], inputData + 16 + (i*16), 16);
+            // CBC decryption
+            if (fileSize(inputFile) < 340)
+            {
+                printf("Ciphertext file can't be smaller than 340 bytes\n");
+                exit(1);
+            }
+            cbcDecryptionWrapper(inputData, passphrase, inputFile, outputFile, mdctx, md);
         }
-
-        // Extract padding data
-        char* padLenStr = slice((char*)inputData, 256 + 16, 256 + 20);
-        int padLen = atoi( padLenStr );
-        printf("(decrypt): Pad = %d", padLen);
-        printf("\n");
-
-        // Re-derive the key
-        DerivedKeyData key = deriveKey(mdctx, md, (unsigned char*)passphrase, strlen(passphrase), (unsigned char*)salt, KDF_ITERS);
-        printf("(decrypt): Key = ");
-        for (int i = 0; i < 32; i++)
-        {
-            printf("%02x", key.key[i]);
-        }
-        printf("\n");
-
-        // Expand
-        DerivedKeyData* roundKeys = expandKeys(mdctx, md, (unsigned char*)passphrase, strlen(passphrase), roundSalts, KDF_ITERS);
-
-        // Split data into blocks
-        char* ciphertext = safeSlice((char*)inputData, 20 + 256, fileSize(inputFile) - padLen);
-        BlockData ciphertextBlocks = getBlocks(ciphertext, fileSize(inputFile) - 20 - 256 - padLen);
-
-        // Decrypt the blocks
-        BlockData xorredBlocks = ciphertextBlocks;
-        for (int i = 1; i < 15; i++)
-        {
-            ecbEncryptBlocks(&xorredBlocks, roundKeys[i].key);
-        }
-        unsigned char* plaintext = join(xorredBlocks.blocks, ciphertextBlocks.blockCount);
-
-        // Save the result into the file
-        int bytesWritten = fwrite(plaintext, 1, 32 * ciphertextBlocks.blockCount - padLen, outputFile);
-        printf("(decrypt): Wrote %d bytes\n", bytesWritten);
-
-        // Cleanup
-        free(key.key);
-        free(key.salt);
-        for (int i = 0; i < 16; i++)
-        {
-            free(roundKeys[i].key);
-            free(roundKeys[i].salt);
-        }
-        free(roundKeys);
-        free(roundSalts);
-        free(padLenStr);
-        // _bsFree(&ciphertextBlocks);
-        _bsFree(&xorredBlocks);
-        free(ciphertext);
-        free(plaintext);
     }
     else
     {
-        // ECB encryption
-        BlockData blocks = getBlocks((char*)inputData, fileSize(inputFile));
-
-        // Derive the master key
-        DerivedKeyData key = deriveKey(mdctx, md, (unsigned char*)passphrase, strlen(passphrase), NULL, KDF_ITERS);
-        printf("(encrypt): Key = ");
-        for (int i = 0; i < 32; i++)
+        if (mode == 1)
         {
-            printf("%02x", key.key[i]);
-        }
-        printf("\n");
-
-        // Expand
-        DerivedKeyData* roundKeys = expandKeys(mdctx, md, (unsigned char*)passphrase, strlen(passphrase), NULL, KDF_ITERS);
-        unsigned char* roundSalts[16];
-        for (int i = 0; i < 16; i++)
+            // ECB encryption
+            ecbEncryptionWrapper(inputData, passphrase, inputFile, outputFile, mdctx, md);
+        } else
         {
-            roundSalts[i] = roundKeys[i].salt;
+            // CBC encryption
+            cbcEncryptionWrapper(inputData, passphrase, inputFile, outputFile, mdctx, md);
         }
-
-        // Encrypt the blocks
-        int padLen = blocks.padLen;
-        BlockData xorredBlocks = blocks;
-        for (int i = 1; i < 15; i++)
-        {
-            ecbEncryptBlocks(&xorredBlocks, roundKeys[i].key);
-        }
-        unsigned char* finalCiphertext = buildECBCiphertext(xorredBlocks, padLen, key.salt, roundSalts);
-
-        // Save the result into the file
-        int bytesWritten = fwrite(finalCiphertext, 1, 20 + 256 + 32 * xorredBlocks.blockCount, outputFile);
-        printf("(encrypt): Wrote %d bytes\n", bytesWritten);
-
-        // Cleanup
-        _bsFree(&xorredBlocks);
-        free(finalCiphertext);
-        free(key.key);
-        free(key.salt);
-        for (int i = 0; i < 16; i++)
-        {
-            free(roundKeys[i].key);
-            free(roundKeys[i].salt);
-        }
-        free(roundKeys);
     }
 
     

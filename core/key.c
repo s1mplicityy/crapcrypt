@@ -6,10 +6,10 @@
 
 #define KEY_LEN   32
 #define SALT_LEN  16
+#define IV_LEN    32
 
 void sha256(EVP_MD_CTX* mdctx, EVP_MD* md, const unsigned char *input, size_t inputLen, unsigned char *output)
 {
-    // I stole this
     unsigned int md_len;
 
     EVP_DigestInit_ex(mdctx, md, NULL);
@@ -106,4 +106,14 @@ DerivedKeyData* expandKeys(EVP_MD_CTX* mdctx, EVP_MD* md, unsigned char* passphr
         keys[i] = key;
     }
     return keys;
+}
+
+unsigned char* getIV()
+{
+    unsigned char* iv = malloc(32);
+    if (RAND_bytes(iv, IV_LEN) != 1) {
+        printf("Failed to generate IV");
+        exit(1);
+    }
+    return iv;
 }

@@ -16,4 +16,6 @@ DerivedKeyData deriveKey(EVP_MD_CTX* mdctx, EVP_MD* md, unsigned char* passphras
 
 DerivedKeyData* expandKeys(EVP_MD_CTX* mdctx, EVP_MD* md, unsigned char* passphrase, size_t passphraseLen, unsigned char** roundSalts, int iters);
 
+unsigned char* getIV();
+
 #endif
