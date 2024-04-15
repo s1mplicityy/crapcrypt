@@ -12,17 +12,8 @@
 #include "core/encryption.h"
 #include "core/core.h"
 
-#define MIN_ARGS  4
-#define MAX_ARGS  50
-
 int main(int argc, char** argv)
 {
-    if (argc < MIN_ARGS || argc > MAX_ARGS)
-    {
-        printf("Invalid argument count (%d), expected %d-%d\n", argc, MIN_ARGS, MAX_ARGS);
-        return 0;
-    }
-
     // Init variables
     char* inputFileName = NULL;
     char* outputFileName = NULL;
